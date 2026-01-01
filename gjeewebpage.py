@@ -16,7 +16,13 @@ Bootstrap(app)
 # Get this from Azure Portal → Your SQL Database → Connection strings → Python (pyodbc)
 # Prefer environment variables for production; fallback to credentials.ini for local dev
 # DRIVER = os.getenv('ODBC_DRIVER', config.get('ODBC', 'Driver', fallback='{ODBC Driver 18 for SQL Server}'))
-DRIVER = os.getenv('ODBC_DRIVER', config.get('ODBC', 'Driver'))
+# DRIVER = os.getenv('ODBC_DRIVER', config.get('ODBC', 'Driver'))
+DRIVER = os.getenv('ODBC_DRIVER')
+if not DRIVER:
+    DRIVER = config.get('ODBC', 'Driver')
+    exception_msg = f"ODBC_DRIVER environment variable not set. Using value from credentials.ini: {DRIVER}"
+    print(exception_msg, file=sys.stderr)
+    exit(1)
 SERVER = os.getenv('ODBC_SERVER', config.get('ODBC', 'Server'))
 DATABASE = os.getenv('ODBC_DATABASE', config.get('ODBC', 'Database'))
 USERNAME = os.getenv('ODBC_UID', config.get('ODBC', 'Uid'))

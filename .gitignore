@@ -1,14 +1,12 @@
 # Ignore local-only files and sensitive data
 credentials.ini
-backup_immich_albums_array
+other/
 .env
 venv/
 __pycache__/
 *.pyc
 .other
 other/
-sync_db/
-sync_all_albums_to_db.py
 *.sqlite
 *.db
 .DS_Store
