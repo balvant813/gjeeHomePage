@@ -8,7 +8,7 @@ from flask_bootstrap import Bootstrap
 app = Flask(__name__)
 app.secret_key = 'qkjfGTTT#ASUT78n45_813'  # Replace with a secure key in production
 # config = configparser.ConfigParser()
-# config.read(os.path.join(os.getcwd(),'credentials.ini'))
+# config.read(os.path.join(os.getcwd(),'./other/credentials.ini'))
 
 Bootstrap(app)
 
@@ -95,11 +95,11 @@ def init_db():
     cursor.execute("SELECT COUNT(*) FROM family_QA")
     if cursor.fetchone()[0] == 0:
         sample_qa = [
-            ('What is your favorite color?', 'blue'),
-            ('What is the name of your first pet?', 'fluffy'),
-            ('Where were you born?', 'city'),
-            ('What is your mother\'s maiden name?', 'patel'),
-            ('What was your first car?', 'honda')
+            ('What was the dogs name in LM?', 'ma..'),
+            ('Who was Jivan Dadas father?', 'khu...'),
+            ('Where were Bhabhu born?', 'tar...'),
+            ('What was masi\'s  (Diwali) elder sister', 'si...'),
+            ('Whose brother is Sohum?', 'as...'),
         ]
         cursor.executemany("INSERT INTO family_QA (question, answer) VALUES (?, ?)", sample_qa)
     
