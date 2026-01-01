@@ -15,16 +15,14 @@ Bootstrap(app)
 # Azure SQL Database connection string
 # Get this from Azure Portal → Your SQL Database → Connection strings → Python (pyodbc)
 # Prefer environment variables for production; fallback to credentials.ini for local dev
-DRIVER = os.getenv('ODBC_DRIVER', config.get('ODBC', 'Driver', fallback='{ODBC Driver 18 for SQL Server}'))
-SERVER = os.getenv('ODBC_SERVER', config.get('ODBC', 'Server', fallback='mangonallc.database.windows.net'))
-DATABASE = os.getenv('ODBC_DATABASE', config.get('ODBC', 'Database', fallback='bp_records'))
-USERNAME = os.getenv('ODBC_UID', config.get('ODBC', 'Uid', fallback='webadmin813'))
-PASSWORD = os.getenv('ODBC_PWD', config.get('ODBC', 'Pwd', fallback='#MangonaDB!813'))
-albumTable = os.getenv('ALBUM_TABLE', config.get('ODBC', 'albumTable', fallback='album_list'))
-try:
-    timeOutLimit = int(os.getenv('ODBC_TIMEOUT', config.get('ODBC', 'timeOutLimit', fallback='60')))
-except Exception:
-    timeOutLimit = 60
+# DRIVER = os.getenv('ODBC_DRIVER', config.get('ODBC', 'Driver', fallback='{ODBC Driver 18 for SQL Server}'))
+DRIVER = os.getenv('ODBC_DRIVER', config.get('ODBC', 'Driver'))
+SERVER = os.getenv('ODBC_SERVER', config.get('ODBC', 'Server'))
+DATABASE = os.getenv('ODBC_DATABASE', config.get('ODBC', 'Database'))
+USERNAME = os.getenv('ODBC_UID', config.get('ODBC', 'Uid'))
+PASSWORD = os.getenv('ODBC_PWD', config.get('ODBC', 'Pwd'))
+albumTable = os.getenv('ALBUM_TABLE', config.get('ODBC', 'albumTable'))
+timeOutLimit = int(os.getenv('ODBC_TIMEOUT', config.get('ODBC', 'timeOutLimit', fallback='60')))
 
 # SERVER = 'mangonallc.database.windows.net'  
 # DRIVER = '{ODBC Driver 18 for SQL Server}'
@@ -40,20 +38,25 @@ CONNECTION_STRING = f'DRIVER={DRIVER};SERVER=tcp:{SERVER},1433;DATABASE={DATABAS
 def get_db_connection():
     return pyodbc.connect(CONNECTION_STRING)
 
-# Initialize DB tables (run once — Azure SQL syntax)
 def init_db():
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # Users table
+    # Users table with password_hint
     cursor.execute('''
         IF OBJECT_ID('album_users', 'U') IS NULL
         CREATE TABLE album_users (
             id INT IDENTITY(1,1) PRIMARY KEY,
             username NVARCHAR(255) UNIQUE NOT NULL,
-            password_hash NVARCHAR(255) NOT NULL
+            password_hash NVARCHAR(255) NOT NULL,
+            password_hint NVARCHAR(255) NULL
         )
     ''')
+    
+    # Add password_hint if not exists
+    cursor.execute("SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'album_users' AND COLUMN_NAME = 'password_hint'")
+    if cursor.fetchone()[0] == 0:
+        cursor.execute("ALTER TABLE album_users ADD password_hint NVARCHAR(255) NULL")
     
     # Family Q&A
     cursor.execute('''
@@ -66,9 +69,9 @@ def init_db():
     ''')
     
     # Album list
-    cursor.execute(f'''
-        IF OBJECT_ID('{albumTable}', 'U') IS NULL
-        CREATE TABLE [{albumTable}] (
+    cursor.execute('''
+        IF OBJECT_ID('album_list', 'U') IS NULL
+        CREATE TABLE album_list (
             id INT IDENTITY(1,1) PRIMARY KEY,
             album_name NVARCHAR(255) NOT NULL,
             endpoint NVARCHAR(MAX) NOT NULL,
@@ -108,6 +111,7 @@ def index():
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    login_failed = False
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT question FROM family_QA")
@@ -120,7 +124,7 @@ def login():
         password = request.form['password']
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT password_hash FROM album_users WHERE username = ?", (username,))
+        cursor.execute("SELECT password_hash FROM album_users WHERE username = ?", username)
         user = cursor.fetchone()
         cursor.close()
         conn.close()
@@ -129,29 +133,35 @@ def login():
             session['username'] = username
             return redirect(url_for('main'))
         else:
+            login_failed = True
             flash('Invalid username or password', 'danger')
 
-    return render_template('login.html', questions=questions)
+    return render_template('login.html', questions=questions, login_failed=login_failed)
 
 @app.route('/register', methods=['POST'])
 def register():
     username = request.form['new_username'].strip()
     password = request.form['new_password']
+    hint = request.form['password_hint'].strip()  # New required hint
     question = request.form['question']
     answer = request.form['answer'].strip().lower()
 
+    if not hint:
+        flash('Password hint is required.', 'danger')
+        return redirect(url_for('login'))
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT answer FROM family_QA WHERE question = ?", (question,))
+    cursor.execute("SELECT answer FROM family_QA WHERE question = ?", question)
     result = cursor.fetchone()
 
     if result and result[0].lower() == answer:
         try:
             hashed = generate_password_hash(password)
-            cursor.execute("INSERT INTO album_users (username, password_hash) VALUES (?, ?)", (username, hashed))
+            cursor.execute("INSERT INTO album_users (username, password_hash, password_hint) VALUES (?, ?, ?)", (username, hashed, hint))
             conn.commit()
             flash('Account created! You can now log in.', 'success')
-        except mysql.connector.IntegrityError:
+        except pyodbc.IntegrityError:
             flash('Username already taken.', 'danger')
     else:
         flash('Wrong answer to security question.', 'danger')
@@ -159,6 +169,31 @@ def register():
     cursor.close()
     conn.close()
     return redirect(url_for('login'))
+
+@app.route('/forgot_password', methods=['GET', 'POST'])
+def forgot_password():
+    hint = None
+    username = None
+    error = None
+
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        if not username:
+            error = "Please enter a username."
+        else:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute("SELECT password_hint FROM album_users WHERE username = ?", (username,))
+            result = cursor.fetchone()
+            cursor.close()
+            conn.close()
+
+            if result and result[0]:
+                hint = result[0]
+            else:
+                error = "No hint found for that username (or user doesn't exist)."
+
+    return render_template('forgot_password.html', hint=hint, username=username, error=error)
 
 @app.route('/main')
 def main():
@@ -173,7 +208,7 @@ def main():
 
     # Row 1: Manual featured albums (from tab_name = 'Categories')
     cursor.execute(f"""
-        SELECT TOP 4 id, album_name, endpoint, thumbnail_url
+        SELECT TOP (4) id, album_name, endpoint, thumbnail_url
         FROM [{albumTable}]
         WHERE tab_name = 'Categories'
         ORDER BY row_num, col_num
@@ -186,16 +221,15 @@ def main():
     # Helper: Get top 4 latest albums from a category
     def get_top_4_from_category(category, row_num):
         cursor.execute(f"""
-            SELECT TOP 4 id, album_name, endpoint, thumbnail_url
+            SELECT TOP (4) id, album_name, endpoint, thumbnail_url
             FROM [{albumTable}]
             WHERE tab_name = 'All' AND category = ?
             ORDER BY 
-                CASE WHEN oldest_photo_date IS NULL THEN 1 ELSE 0 END ASC,  -- NULLs last
-                oldest_photo_date DESC,                                      -- Latest photos first
+                CASE WHEN oldest_photo_date IS NULL THEN 1 ELSE 0 END ASC,
+                oldest_photo_date DESC,
                 album_name ASC
         """, (category,))
         albums = cursor.fetchall()
-        # Add row_num and col_num (1 to 4)
         return [(album[0], album[1], album[2], album[3], row_num, idx+1) for idx, album in enumerate(albums)]
 
     # Row 2: Family
