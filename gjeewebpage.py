@@ -1,4 +1,4 @@
-import configparser
+# import configparser
 from flask import Flask, render_template, request, redirect, url_for, session, flash
 import pyodbc
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -7,8 +7,8 @@ from flask_bootstrap import Bootstrap
 
 app = Flask(__name__)
 app.secret_key = 'qkjfGTTT#ASUT78n45_813'  # Replace with a secure key in production
-config = configparser.ConfigParser()
-config.read(os.path.join(os.getcwd(),'credentials.ini'))
+# config = configparser.ConfigParser()
+# config.read(os.path.join(os.getcwd(),'credentials.ini'))
 
 Bootstrap(app)
 
@@ -19,16 +19,16 @@ Bootstrap(app)
 # DRIVER = os.getenv('ODBC_DRIVER', config.get('ODBC', 'Driver'))
 DRIVER = os.getenv('ODBC_DRIVER')
 if not DRIVER:
-    DRIVER = config.get('ODBC', 'Driver')
     exception_msg = f"ODBC_DRIVER environment variable not set. Using value from credentials.ini: {DRIVER}"
     print(exception_msg, file=sys.stderr)
     exit(1)
-SERVER = os.getenv('ODBC_SERVER', config.get('ODBC', 'Server'))
-DATABASE = os.getenv('ODBC_DATABASE', config.get('ODBC', 'Database'))
-USERNAME = os.getenv('ODBC_UID', config.get('ODBC', 'Uid'))
-PASSWORD = os.getenv('ODBC_PWD', config.get('ODBC', 'Pwd'))
-albumTable = os.getenv('ALBUM_TABLE', config.get('ODBC', 'albumTable'))
-timeOutLimit = int(os.getenv('ODBC_TIMEOUT', config.get('ODBC', 'timeOutLimit', fallback='60')))
+SERVER = os.getenv('ODBC_SERVER')
+DATABASE = os.getenv('ODBC_DATABASE')
+
+USERNAME = os.getenv('ODBC_UID')
+PASSWORD = os.getenv('ODBC_PWD')
+albumTable = os.getenv('ALBUM_TABLE')
+timeOutLimit = int(os.getenv('ODBC_TIMEOUT') or 60)
 
 # SERVER = 'mangonallc.database.windows.net'  
 # DRIVER = '{ODBC Driver 18 for SQL Server}'
@@ -37,7 +37,7 @@ timeOutLimit = int(os.getenv('ODBC_TIMEOUT', config.get('ODBC', 'timeOutLimit', 
 # PASSWORD = '#MangonaDB!813'
 # albumTable = 'album_list'
 # timeOutLimit = 60
-port = 1433
+# port = 1433
 CONNECTION_STRING = f'DRIVER={DRIVER};SERVER=tcp:{SERVER},1433;DATABASE={DATABASE};UID={USERNAME};PWD={PASSWORD}; \
         Encrypt=yes;TrustServerCertificate=no;Connection Timeout={timeOutLimit};'
 
