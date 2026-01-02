@@ -29,7 +29,8 @@ USERNAME = os.getenv('ODBC_UID')
 PASSWORD = os.getenv('ODBC_PWD')
 albumTable = os.getenv('ALBUM_TABLE')
 timeOutLimit = int(os.getenv('ODBC_TIMEOUT') or 60)
-
+userTable = 'album_users'
+qaTable = 'family_QA'
 # SERVER = 'mangonallc.database.windows.net'  
 # DRIVER = '{ODBC Driver 18 for SQL Server}'
 # DATABASE = 'bp_records'
@@ -48,67 +49,133 @@ def init_db():
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # Users table with password_hint
-    cursor.execute('''
-        IF OBJECT_ID('album_users', 'U') IS NULL
-        CREATE TABLE album_users (
+    # Updated album_users table with new fields
+    cursor.execute(f'''
+        IF OBJECT_ID('{userTable}', 'U') IS NULL
+        CREATE TABLE {userTable} (
             id INT IDENTITY(1,1) PRIMARY KEY,
             username NVARCHAR(255) UNIQUE NOT NULL,
             password_hash NVARCHAR(255) NOT NULL,
-            password_hint NVARCHAR(255) NULL
+            password_hint NVARCHAR(255) NOT NULL,
+            city NVARCHAR(100) NOT NULL,
+            state NVARCHAR(100) NOT NULL,
+            country NVARCHAR(100) NOT NULL
         )
     ''')
     
-    # Add password_hint if not exists
-    cursor.execute("SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'album_users' AND COLUMN_NAME = 'password_hint'")
-    if cursor.fetchone()[0] == 0:
-        cursor.execute("ALTER TABLE album_users ADD password_hint NVARCHAR(255) NULL")
-    
-    # Family Q&A
-    cursor.execute('''
-        IF OBJECT_ID('family_QA', 'U') IS NULL
-        CREATE TABLE family_QA (
-            id INT IDENTITY(1,1) PRIMARY KEY,
-            question NVARCHAR(255) NOT NULL,
-            answer NVARCHAR(255) NOT NULL
-        )
-    ''')
-    
-    # Album list
-    cursor.execute('''
-        IF OBJECT_ID('album_list', 'U') IS NULL
-        CREATE TABLE album_list (
-            id INT IDENTITY(1,1) PRIMARY KEY,
-            album_name NVARCHAR(255) NOT NULL,
-            endpoint NVARCHAR(MAX) NOT NULL,
-            thumbnail_url NVARCHAR(MAX),
-            tab_name NVARCHAR(50) NOT NULL,
-            row_num INT NOT NULL,
-            col_num INT NOT NULL,
-            created_at DATETIME NULL,
-            oldest_photo_date DATETIME NULL,
-            category NVARCHAR(50) DEFAULT 'Family'
-        )
-    ''')
-    
-    # Sample questions
-    cursor.execute("SELECT COUNT(*) FROM family_QA")
-    if cursor.fetchone()[0] == 0:
-        sample_qa = [
-            ('What was the dogs name in LM?', 'ma..'),
-            ('Who was Jivan Dadas father?', 'khu...'),
-            ('Where were Bhabhu born?', 'tar...'),
-            ('What was masi\'s  (Diwali) elder sister', 'si...'),
-            ('Whose brother is Sohum?', 'as...'),
-        ]
-        cursor.executemany("INSERT INTO family_QA (question, answer) VALUES (?, ?)", sample_qa)
+    # Add new columns if table already exists
+    columns_to_add = ['password_hint', 'city', 'state', 'country']
+    for col in columns_to_add:
+        cursor.execute(f"""
+            IF NOT EXISTS (SELECT * FROM INFORMATION_SCHEMA.COLUMNS 
+                           WHERE TABLE_NAME = '{userTable}' AND COLUMN_NAME = '{col}')
+            BEGIN
+                ALTER TABLE {userTable} ADD {col} NVARCHAR(100) NOT NULL DEFAULT ''
+            END
+        """)
     
     conn.commit()
     cursor.close()
     conn.close()
 
 init_db()
+# Update /register route with full validation
+@app.route('/register', methods=['POST'])
+def register():
+    username = request.form['new_username'].strip()
+    password = request.form['new_password']
+    hint = request.form['password_hint'].strip()
+    city = request.form['city'].strip()
+    state = request.form['state'].strip()
+    country = request.form['country'].strip()
+    question = request.form['question']
+    answer = request.form['answer'].strip().lower()
 
+    errors = []
+
+    # Validation rules
+    if len(username) < 6:
+        errors.append("Username must be at least 6 characters.")
+    if len(password) < 6:
+        errors.append("Password must be at least 6 characters.")
+    if not any(c.isupper() for c in password):
+        errors.append("Password must contain at least one uppercase letter.")
+    if not any(c in "!@#$%^&*()_+-=[]{}|;:,.<>?" for c in password):
+        errors.append("Password must contain at least one special character.")
+    if len(hint) <= 3:
+        errors.append("Password hint must be more than 3 characters.")
+    if len(city) <= 3:
+        errors.append("City must be more than 3 characters.")
+    if len(state) <= 3:
+        errors.append("State must be more than 3 characters.")
+    if len(country) < 2:
+        errors.append("Country must be at least 2 characters.")
+
+    if errors:
+        for err in errors:
+            flash(err, 'danger')
+        return redirect(url_for('login'))
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(f"SELECT answer FROM {qaTable} WHERE question = ?", question)
+    result = cursor.fetchone()
+
+    if result and result[0].lower() == answer:
+        try:
+            hashed = generate_password_hash(password)
+            if hint == password:
+                flash('Password hint cannot be the same as the password. Truncated to first 3 chars', 'danger')
+                hint = password[:3]
+            cursor.execute(f"""
+                INSERT INTO {userTable} 
+                (username, password_hash, password_hint, city, state, country) 
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (username, hashed, hint, city, state, country))
+            conn.commit()
+            flash('Account created successfully! You can now log in.', 'success')
+        except pyodbc.IntegrityError:
+            flash('Username already taken.', 'danger')
+    else:
+        flash('Wrong answer to security question.', 'danger')
+
+    cursor.close()
+    conn.close()
+    return redirect(url_for('login'))
+@app.route('/delete_account', methods=['GET', 'POST'])
+def delete_account():
+    error = None
+    success = False
+
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip().lower()
+        city = request.form.get('city', '').strip().lower()
+        state = request.form.get('state', '').strip().lower()
+
+        if not all([username, city, state]):
+            error = "All fields are required."
+        else:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute(f"""
+                SELECT username FROM {userTable} 
+                WHERE LOWER(username) = ? 
+                  AND LOWER(city) = ? 
+                  AND LOWER(state) = ?
+            """, (username, city, state))
+            user = cursor.fetchone()
+            
+            if user:
+                cursor.execute(f"DELETE FROM {userTable} WHERE LOWER(username) = ?", (username,))
+                conn.commit()
+                success = True
+            else:
+                error = "No matching account found with provided details."
+            
+            cursor.close()
+            conn.close()
+
+    return render_template('delete_account.html', error=error, success=success)
 @app.route('/')
 def index():
     if 'username' in session:
@@ -120,7 +187,7 @@ def login():
     login_failed = False
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT question FROM family_QA")
+    cursor.execute(f"SELECT question FROM {qaTable}")
     questions = [row[0] for row in cursor.fetchall()]
     cursor.close()
     conn.close()
@@ -130,7 +197,7 @@ def login():
         password = request.form['password']
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT password_hash FROM album_users WHERE username = ?", username)
+        cursor.execute(f"SELECT password_hash FROM {userTable} WHERE username = ?", username)
         user = cursor.fetchone()
         cursor.close()
         conn.close()
@@ -143,38 +210,6 @@ def login():
             flash('Invalid username or password', 'danger')
 
     return render_template('login.html', questions=questions, login_failed=login_failed)
-
-@app.route('/register', methods=['POST'])
-def register():
-    username = request.form['new_username'].strip()
-    password = request.form['new_password']
-    hint = request.form['password_hint'].strip()  # New required hint
-    question = request.form['question']
-    answer = request.form['answer'].strip().lower()
-
-    if not hint:
-        flash('Password hint is required.', 'danger')
-        return redirect(url_for('login'))
-
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT answer FROM family_QA WHERE question = ?", question)
-    result = cursor.fetchone()
-
-    if result and result[0].lower() == answer:
-        try:
-            hashed = generate_password_hash(password)
-            cursor.execute("INSERT INTO album_users (username, password_hash, password_hint) VALUES (?, ?, ?)", (username, hashed, hint))
-            conn.commit()
-            flash('Account created! You can now log in.', 'success')
-        except pyodbc.IntegrityError:
-            flash('Username already taken.', 'danger')
-    else:
-        flash('Wrong answer to security question.', 'danger')
-
-    cursor.close()
-    conn.close()
-    return redirect(url_for('login'))
 
 @app.route('/forgot_password', methods=['GET', 'POST'])
 def forgot_password():
@@ -189,7 +224,7 @@ def forgot_password():
         else:
             conn = get_db_connection()
             cursor = conn.cursor()
-            cursor.execute("SELECT password_hint FROM album_users WHERE username = ?", (username,))
+            cursor.execute(f"SELECT password_hint FROM {userTable} WHERE username = ?", (username,))
             result = cursor.fetchone()
             cursor.close()
             conn.close()
