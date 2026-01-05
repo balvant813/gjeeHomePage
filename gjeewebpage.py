@@ -5,14 +5,15 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import os, sys
 from flask_bootstrap import Bootstrap
 from datetime import datetime
+from flask import jsonify
+import random
 
 app = Flask(__name__)
 app.secret_key = 'qkjfGTTT#ASUT78n45_813'  # CHANGE THIS IN PRODUCTION!
 app.jinja_env.filters['strftime'] = lambda dt, fmt: datetime.now().strftime(fmt)
 
 # Application Version
-# appVer = 'v2026.1.1'  # Initial version
-appVer = 'v2026.1.2'  # Updated version after search feature enhancement
+appVer = 'v2026.1.3'  # Clickable cards + header thumbnail
 
 Bootstrap(app)
 
@@ -27,7 +28,7 @@ DATABASE = os.getenv('ODBC_DATABASE')
 USERNAME = os.getenv('ODBC_UID')
 PASSWORD = os.getenv('ODBC_PWD')
 albumTable = os.getenv('ALBUM_TABLE', 'album_list')
-userTable = 'album_users'  # Fixed table name
+userTable = 'album_users'
 timeOutLimit = int(os.getenv('ODBC_TIMEOUT') or 60)
 
 CONNECTION_STRING = (
@@ -120,12 +121,22 @@ def get_main_data():
         'category_album_counts': category_album_counts,
         'valid_categories': valid_categories
     }
+# Random album thumbnails for header (now returns name + url)
+@app.route('/random_album_thumbs')
+def random_album_thumbs():
+    if 'username' not in session:
+        return jsonify([])
 
-@app.route('/')
-def index():
-    if 'username' in session:
-        return redirect(url_for('main'))
-    return redirect(url_for('login'))
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(f"SELECT album_name, thumbnail_url, endpoint FROM [{albumTable}] WHERE thumbnail_url IS NOT NULL AND thumbnail_url != '' AND tab_name = 'All'")
+    rows = cursor.fetchall()
+    cursor.close()
+    conn.close()
+
+    items = [{"name": row[0], "url": row[1], "endpoint": row[2]} for row in rows]
+    random.shuffle(items)
+    return jsonify(items[:20])
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
