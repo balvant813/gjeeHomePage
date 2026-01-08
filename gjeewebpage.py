@@ -138,6 +138,13 @@ def random_album_thumbs():
     random.shuffle(items)
     return jsonify(items[:20])
 
+@app.route('/')
+def home():
+    if 'username' in session:
+        return redirect(url_for('main'))
+    else:
+        return redirect(url_for('login'))
+    
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     login_failed = False
