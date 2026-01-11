@@ -338,7 +338,7 @@ def register():
     cursor.execute("SELECT answer FROM family_QA WHERE question = ?", question)
     result = cursor.fetchone()
 
-    if result and result[0].lower() == answer:
+    if result and result[0].lower() == answer.lower():
         try:
             hashed = generate_password_hash(password)
             cursor.execute(f"""
@@ -387,6 +387,7 @@ def forgot_password():
                 error = "No hint found for that username (or user doesn't exist)."
 
     return render_template('forgot_password.html', hint=hint, username=username, error=error)
+
 @app.route('/delete_account', methods=['GET', 'POST'])
 def delete_account():
     error = None
@@ -400,27 +401,39 @@ def delete_account():
         if not all([username, city, state]):
             error = "All fields are required."
         else:
+            # Prepare the first 3 chars (safe even if input is shorter than 3)
+            city_prefix = city[:3]
+            state_prefix = state[:3]
+
             conn = get_db_connection()
             cursor = conn.cursor()
+
+            # Compare first 3 lowercase characters for city and state
             cursor.execute(f"""
-                SELECT username FROM [{userTable}] 
+                SELECT username 
+                FROM [{userTable}] 
                 WHERE LOWER(username) = ? 
-                  AND LOWER(city) = ? 
-                  AND LOWER(state) = ?
-            """, (username, city, state))
+                  AND LOWER(LEFT(city, 3)) = ? 
+                  AND LOWER(LEFT(state, 3)) = ?
+            """, (username, city_prefix, state_prefix))
+
             user = cursor.fetchone()
-            
+
             if user:
+                # Optional: Log the deletion attempt (good practice)
+                # cursor.execute("INSERT INTO deletion_log (username, deleted_at) VALUES (?, GETDATE())", (username,))
+                # conn.commit()
+
                 cursor.execute(f"DELETE FROM [{userTable}] WHERE LOWER(username) = ?", (username,))
                 conn.commit()
                 success = True
+                flash('Your account has been successfully deleted.', 'success')
             else:
-                error = "No matching account found with the provided details."
-            
+                error = "No matching account found. Please check your details (city/state are matched using first 3 letters)."
+
             cursor.close()
             conn.close()
 
     return render_template('delete_account.html', error=error, success=success)
-
 if __name__ == '__main__':
     app.run(host='127.0.0.2', port=5000, debug=False)
