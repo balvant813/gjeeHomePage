@@ -4,9 +4,10 @@ import pyodbc
 from werkzeug.security import generate_password_hash, check_password_hash
 import os, sys
 from flask_bootstrap import Bootstrap
-from datetime import datetime
+from datetime import datetime, timedelta
 from flask import jsonify
 import random
+import time
 
 app = Flask(__name__)
 app.secret_key = 'qkjfGTTT#ASUT78n45_813'  # CHANGE THIS IN PRODUCTION!
@@ -14,9 +15,19 @@ app.jinja_env.filters['strftime'] = lambda dt, fmt: datetime.now().strftime(fmt)
 
 # Application Version
 # appVer = 'v2026.1.3'  # Clickable cards + header thumbnail
-appVer = 'v2026.1.4'  # Account deletion enhancement, and password reveal toggle
-
+# appVer = 'v2026.1.4'  # Account deletion enhancement, and password reveal toggle
+appVer = 'v2026.1.5'  # Azure SQL Database connection enhancement, and logout on inactivity added
 Bootstrap(app)
+
+@app.before_request
+def check_inactivity():
+    if 'username' in session and request.endpoint not in ['login', 'logout', 'static']:
+        if 'last_activity' in session:
+            if datetime.now() - session['last_activity'] > timedelta(minutes=15):
+                session.pop('username', None)
+                flash('You have been logged out due to inactivity.', 'info')
+                return redirect(url_for('login'))
+        session['last_activity'] = datetime.now()
 
 # Azure SQL Database connection
 DRIVER = os.getenv('ODBC_DRIVER')
@@ -41,8 +52,16 @@ CONNECTION_STRING = (
     f'Encrypt=yes;TrustServerCertificate=no;Connection Timeout={timeOutLimit};'
 )
 
-def get_db_connection():
-    return pyodbc.connect(CONNECTION_STRING)
+def get_db_connection(retries=3):
+    for attempt in range(retries):
+        try:
+            return pyodbc.connect(CONNECTION_STRING)
+        except pyodbc.OperationalError as e:
+            if "timeout" in str(e).lower() and attempt < retries - 1:
+                time.sleep(1)
+                continue
+            else:
+                raise
 
 # Shared function for main data (curated + categories)
 def get_main_data():
@@ -149,12 +168,17 @@ def home():
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     login_failed = False
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT question FROM family_QA")
-    questions = [row[0] for row in cursor.fetchall()]
-    cursor.close()
-    conn.close()
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT question FROM family_QA")
+        questions = [row[0] for row in cursor.fetchall()]
+        cursor.close()
+        conn.close()
+    except Exception as e:
+        print(f"Database connection error: {e}", file=sys.stderr)
+        flash("Database connection error. Please try again later.", "danger")
+        return render_template('login.html', questions=[], login_failed=False)
 
     if request.method == 'POST':
         username = request.form['username']
