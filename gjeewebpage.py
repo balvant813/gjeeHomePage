@@ -23,6 +23,9 @@ Bootstrap(app)
 def check_inactivity():
     if 'username' in session and request.endpoint not in ['login', 'logout', 'static']:
         if 'last_activity' in session:
+            # Ensure last_activity is timezone-aware
+            if session['last_activity'].tzinfo is None:
+                session['last_activity'] = session['last_activity'].replace(tzinfo=timezone.utc)
             if datetime.now(timezone.utc) - session['last_activity'] > timedelta(minutes=15):
                 session.pop('username', None)
                 flash('You have been logged out due to inactivity.', 'info')
