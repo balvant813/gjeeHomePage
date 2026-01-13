@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CSS Gradient Generator</title>
+    <link rel="stylesheet" href="css/gradient_generator.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>CSS Gradient Generator</h1>
+            <p class="subtitle">Create beautiful gradients and export custom stylesheets</p>
+        </header>
+
+        <main>
+            <!-- Live Preview Section -->
+            <section class="preview-section">
+                <h2>Live Preview</h2>
+                <div id="gradient-preview" class="gradient-preview"></div>
+            </section>
+
+            <!-- Controls Section -->
+            <section class="controls-section">
+                <h2>Gradient Controls</h2>
+                
+                <!-- Gradient Type -->
+                <div class="control-group">
+                    <label for="gradient-type">Gradient Type</label>
+                    <select id="gradient-type">
+                        <option value="linear">Linear</option>
+                        <option value="radial">Radial</option>
+                        <option value="conic">Conic</option>
+                    </select>
+                </div>
+
+                <!-- Direction/Angle (for linear gradients) -->
+                <div class="control-group" id="direction-control">
+                    <label for="gradient-direction">Direction</label>
+                    <div class="direction-options">
+                        <select id="gradient-direction">
+                            <option value="to right">To Right</option>
+                            <option value="to left">To Left</option>
+                            <option value="to bottom">To Bottom</option>
+                            <option value="to top">To Top</option>
+                            <option value="to bottom right">To Bottom Right</option>
+                            <option value="to bottom left">To Bottom Left</option>
+                            <option value="to top right">To Top Right</option>
+                            <option value="to top left">To Top Left</option>
+                            <option value="custom">Custom Angle</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Custom Angle -->
+                <div class="control-group" id="angle-control" style="display: none;">
+                    <label for="gradient-angle">Angle (degrees)</label>
+                    <div class="range-container">
+                        <input type="range" id="gradient-angle" min="0" max="360" value="90">
+                        <span id="angle-value">90°</span>
+                    </div>
+                </div>
+
+                <!-- Radial Shape (for radial gradients) -->
+                <div class="control-group" id="radial-shape-control" style="display: none;">
+                    <label for="radial-shape">Shape</label>
+                    <select id="radial-shape">
+                        <option value="circle">Circle</option>
+                        <option value="ellipse">Ellipse</option>
+                    </select>
+                </div>
+
+                <!-- Radial Position -->
+                <div class="control-group" id="radial-position-control" style="display: none;">
+                    <label for="radial-position">Position</label>
+                    <select id="radial-position">
+                        <option value="center">Center</option>
+                        <option value="top">Top</option>
+                        <option value="bottom">Bottom</option>
+                        <option value="left">Left</option>
+                        <option value="right">Right</option>
+                        <option value="top left">Top Left</option>
+                        <option value="top right">Top Right</option>
+                        <option value="bottom left">Bottom Left</option>
+                        <option value="bottom right">Bottom Right</option>
+                    </select>
+                </div>
+
+                <!-- Color Stops -->
+                <div class="control-group">
+                    <label>Color Stops</label>
+                    <div id="color-stops-container">
+                        <div class="color-stop" data-index="0">
+                            <input type="color" class="color-picker" value="#667eea" title="Select color" aria-label="Color picker">
+                            <input type="number" class="stop-position" min="0" max="100" value="0" placeholder="%">
+                            <span class="position-label">%</span>
+                            <button class="remove-stop" title="Remove color stop">×</button>
+                        </div>
+                        <div class="color-stop" data-index="1">
+                            <input type="color" class="color-picker" value="#764ba2" title="Select color" aria-label="Color picker">
+                            <input type="number" class="stop-position" min="0" max="100" value="100" placeholder="%">
+                            <span class="position-label">%</span>
+                            <button class="remove-stop" title="Remove color stop">×</button>
+                        </div>
+                    </div>
+                    <button id="add-color-stop" class="btn btn-secondary">+ Add Color Stop</button>
+                </div>
+
+                <!-- Repeating Gradient -->
+                <div class="control-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="repeating-gradient">
+                        <span>Repeating Gradient</span>
+                    </label>
+                </div>
+            </section>
+
+            <!-- CSS Output Section -->
+            <section class="output-section">
+                <h2>Generated CSS</h2>
+                <div class="css-output-container">
+                    <pre id="css-output" class="css-output"></pre>
+                    <button id="copy-css" class="btn btn-primary">Copy CSS</button>
+                </div>
+            </section>
+
+            <!-- Export Section -->
+            <section class="export-section">
+                <h2>Export Options</h2>
+                <div class="export-options">
+                    <div class="control-group">
+                        <label for="class-name">CSS Class Name</label>
+                        <input type="text" id="class-name" value="gradient-bg" placeholder="Enter class name">
+                    </div>
+                    <div class="control-group">
+                        <label for="include-prefixes">
+                            <input type="checkbox" id="include-prefixes" checked>
+                            Include vendor prefixes
+                        </label>
+                    </div>
+                    <div class="export-buttons">
+                        <button id="export-css" class="btn btn-primary">Export as CSS File</button>
+                        <button id="export-scss" class="btn btn-secondary">Export as SCSS</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Presets Section -->
+            <section class="presets-section">
+                <h2>Gradient Presets</h2>
+                <div class="presets-grid" id="presets-grid">
+                    <!-- Presets will be generated by JavaScript -->
+                </div>
+            </section>
+        </main>
+
+        <footer>
+            <p>&copy; 2026 CSS Gradient Generator</p>
+        </footer>
+    </div>
+
+    <script src="js/gradient_generator.js"></script>
+</body>
+</html>

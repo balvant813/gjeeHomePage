@@ -13,7 +13,8 @@ app.secret_key = 'qkjfGTTT#ASUT78n45_813'  # CHANGE THIS IN PRODUCTION!
 app.jinja_env.filters['strftime'] = lambda dt, fmt: datetime.now().strftime(fmt)
 
 # Application Version
-appVer = 'v2026.1.3'  # Clickable cards + header thumbnail
+# appVer = 'v2026.1.3'  # Clickable cards + header thumbnail
+appVer = 'v2026.1.4'  # Account deletion enhancement, and password reveal toggle
 
 Bootstrap(app)
 
@@ -435,5 +436,11 @@ def delete_account():
             conn.close()
 
     return render_template('delete_account.html', error=error, success=success)
+
+@app.route('/gradient-generator')
+def gradient_generator():
+    """CSS Gradient Generator - Create custom gradients with live preview"""
+    return render_template('gradient_generator.html')
+
 if __name__ == '__main__':
     app.run(host='127.0.0.2', port=5000, debug=False)
