@@ -4,7 +4,7 @@ import pyodbc
 from werkzeug.security import generate_password_hash, check_password_hash
 import os, sys
 from flask_bootstrap import Bootstrap
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from flask import jsonify
 import random
 import time
@@ -23,11 +23,11 @@ Bootstrap(app)
 def check_inactivity():
     if 'username' in session and request.endpoint not in ['login', 'logout', 'static']:
         if 'last_activity' in session:
-            if datetime.now() - session['last_activity'] > timedelta(minutes=15):
+            if datetime.now(timezone.utc) - session['last_activity'] > timedelta(minutes=15):
                 session.pop('username', None)
                 flash('You have been logged out due to inactivity.', 'info')
                 return redirect(url_for('login'))
-        session['last_activity'] = datetime.now()
+        session['last_activity'] = datetime.now(timezone.utc)
 
 # Azure SQL Database connection
 DRIVER = os.getenv('ODBC_DRIVER')
