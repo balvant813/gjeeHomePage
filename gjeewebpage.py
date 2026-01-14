@@ -16,7 +16,7 @@ app.jinja_env.filters['strftime'] = lambda dt, fmt: datetime.now().strftime(fmt)
 # Application Version
 # appVer = 'v2026.1.3'  # Clickable cards + header thumbnail
 # appVer = 'v2026.1.4'  # Account deletion enhancement, and password reveal toggle
-appVer = 'v2026.1.5'  # Azure SQL Database connection enhancement, and logout on inactivity added
+appVer = 'v2026.1.51'  # Azure SQL Database connection enhancement, and logout on inactivity added
 Bootstrap(app)
 
 @app.before_request
@@ -28,6 +28,7 @@ def check_inactivity():
                 session['last_activity'] = session['last_activity'].replace(tzinfo=timezone.utc)
             if datetime.now(timezone.utc) - session['last_activity'] > timedelta(minutes=15):
                 session.pop('username', None)
+                session.pop('last_activity', None)
                 flash('You have been logged out due to inactivity.', 'info')
                 return redirect(url_for('login'))
         session['last_activity'] = datetime.now(timezone.utc)
@@ -388,6 +389,7 @@ def register():
 @app.route('/logout')
 def logout():
     session.pop('username', None)
+    session.pop('last_activity', None)
     flash('You have been logged out.', 'info')
     return redirect(url_for('login'))
 
