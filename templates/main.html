@@ -190,10 +190,10 @@
                 </button>
             </li>
             {% for cat in valid_categories %}
-                {% if category_album_counts.get(cat, 0) > 0 %}
+                {% if category_album_counts.get(cat, {}).get('total', 0) > 0 %}
                     <li class="nav-item" role="presentation">
                         <button class="nav-link" id="{{ cat|lower }}-tab" data-bs-toggle="tab" data-bs-target="#{{ cat|lower }}" type="button">
-                            {{ cat }} <span class="badge bg-secondary">{{ category_album_counts[cat] }}</span>
+                            {{ cat }} <span class="badge bg-secondary">{{ category_album_counts[cat].total }}</span>
                         </button>
                     </li>
                 {% endif %}
@@ -212,7 +212,7 @@
             <div class="tab-pane fade {% if not is_search %}show active{% endif %}" id="manual">
                 {% for row, albums in categories_groups.items() %}
                     <h3 class="section-title">{{ category_titles[row] }}</h3>
-                    <div class="row row-cols-1 row-cols-md-4 g-5">
+                    <div class="row row-cols-2 row-cols-md-4 g-5">
                         {% for album in albums %}
                             <div class="col">
                                 <a href="{{ album[2] }}" target="_blank" class="text-decoration-none">
@@ -237,27 +237,63 @@
             {% for cat in valid_categories %}
                 {% if category_groups.get(cat) %}
                     <div class="tab-pane fade" id="{{ cat|lower }}">
-                        <h3 class="section-title">{{ cat }} Albums</h3>
-                        {% for row_group in category_groups[cat] %}
-                            <div class="row row-cols-1 row-cols-md-4 g-5 mb-5">
-                                {% for album in row_group %}
-                                    <div class="col">
-                                        <a href="{{ album[2] }}" target="_blank" class="text-decoration-none">
-                                            <div class="card album-card h-100">
-                                                {% if album[3] %}
-                                                    <img src="{{ album[3] }}" class="card-img-top" alt="{{ album[1] }}">
-                                                {% else %}
-                                                    <div class="no-thumbnail">No Preview</div>
-                                                {% endif %}
-                                                <div class="card-body d-flex flex-column">
-                                                    <h5 class="card-title flex-grow-1 text-dark">{{ album[1] }}</h5>
-                                                </div>
+                        <h3 class="section-title">{{ cat }}</h3>
+                        <ul class="nav nav-tabs mb-3" id="sub-tab-{{ cat|lower }}" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="{{ cat|lower }}-pictures-tab" data-bs-toggle="tab" data-bs-target="#{{ cat|lower }}-pictures" type="button">Pictures <span class="badge bg-secondary">{{ category_album_counts[cat].pictures }}</span></button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="{{ cat|lower }}-videos-tab" data-bs-toggle="tab" data-bs-target="#{{ cat|lower }}-videos" type="button">Videos <span class="badge bg-secondary">{{ category_album_counts[cat].videos }}</span></button>
+                            </li>
+                        </ul>
+                        <div class="tab-content">
+                            <div class="tab-pane fade show active" id="{{ cat|lower }}-pictures">
+                                <h4 class="section-title">{{ cat }} Pictures</h4>
+                                {% for row_group in category_groups[cat].pictures %}
+                                    <div class="row row-cols-2 row-cols-md-4 g-5 mb-5">
+                                        {% for album in row_group %}
+                                            <div class="col">
+                                                <a href="{{ album[2] }}" target="_blank" class="text-decoration-none">
+                                                    <div class="card album-card h-100">
+                                                        {% if album[3] %}
+                                                            <img src="{{ album[3] }}" class="card-img-top" alt="{{ album[1] }}">
+                                                        {% else %}
+                                                            <div class="no-thumbnail">No Preview</div>
+                                                        {% endif %}
+                                                        <div class="card-body d-flex flex-column">
+                                                            <h5 class="card-title flex-grow-1 text-dark">{{ album[1] }}</h5>
+                                                        </div>
+                                                    </div>
+                                                </a>
                                             </div>
-                                        </a>
+                                        {% endfor %}
                                     </div>
                                 {% endfor %}
                             </div>
-                        {% endfor %}
+                            <div class="tab-pane fade" id="{{ cat|lower }}-videos">
+                                <h4 class="section-title">{{ cat }} Videos</h4>
+                                {% for row_group in category_groups[cat].videos %}
+                                    <div class="row row-cols-2 row-cols-md-4 g-5 mb-5">
+                                        {% for album in row_group %}
+                                            <div class="col">
+                                                <a href="{{ album[2] }}" target="_blank" class="text-decoration-none">
+                                                    <div class="card album-card h-100">
+                                                        {% if album[3] %}
+                                                            <img src="{{ album[3] }}" class="card-img-top" alt="{{ album[1] }}">
+                                                        {% else %}
+                                                            <div class="no-thumbnail">No Preview</div>
+                                                        {% endif %}
+                                                        <div class="card-body d-flex flex-column">
+                                                            <h5 class="card-title flex-grow-1 text-dark">{{ album[1] }}</h5>
+                                                        </div>
+                                                    </div>
+                                                </a>
+                                            </div>
+                                        {% endfor %}
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        </div>
                     </div>
                 {% endif %}
             {% endfor %}
@@ -273,7 +309,7 @@
                     </h3>
                     {% for year in sorted_years %}
                         <h4 class="mt-5 mb-3 text-primary">Year {{ year }}</h4>
-                        <div class="row row-cols-1 row-cols-md-4 g-5">
+                        <div class="row row-cols-2 row-cols-md-4 g-5">
                             {% for name, endpoint, thumb in search_results[year] %}
                                 <div class="col">
                                     <a href="{{ endpoint }}" target="_blank" class="text-decoration-none">

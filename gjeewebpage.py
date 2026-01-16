@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 from flask import jsonify
 import random
 import time
+import re
 
 app = Flask(__name__)
 app.secret_key = 'qkjfGTTT#ASUT78n45_813'  # CHANGE THIS IN PRODUCTION!
@@ -16,8 +17,8 @@ app.jinja_env.filters['strftime'] = lambda dt, fmt: datetime.now().strftime(fmt)
 # Application Version
 # appVer = 'v2026.1.3'  # Clickable cards + header thumbnail
 # appVer = 'v2026.1.4'  # Account deletion enhancement, and password reveal toggle
-appVer = 'v2026.1.51'  # Azure SQL Database connection enhancement, and logout on inactivity added
-Bootstrap(app)
+# appVer = 'v2026.1.51'  # Azure SQL Database connection enhancement, and logout on inactivity added
+appVer = 'v2026.1.6'  # video tabs added to each catagory
 
 @app.before_request
 def check_inactivity():
@@ -67,6 +68,9 @@ def get_db_connection(retries=3):
             else:
                 raise
 
+def clean_album_name(name):
+    return re.sub(r'\s*\([^)]*\)\s*$', '', name)
+
 # Shared function for main data (curated + categories)
 def get_main_data():
     conn = get_db_connection()
@@ -74,15 +78,25 @@ def get_main_data():
 
     curated_groups = {}
 
-    # Featured (manual)
+    # Featured Picture Albums
     cursor.execute(f"""
         SELECT TOP (4) id, album_name, endpoint, thumbnail_url
         FROM [{albumTable}]
-        WHERE tab_name = 'Categories'
+        WHERE tab_name = 'Categories' AND media IS NOT NULL AND LOWER(media) = 'pictures'
         ORDER BY row_num, col_num
     """)
     row1 = cursor.fetchall()
-    curated_groups[1] = [(a[0], a[1], a[2], a[3], 1, idx+1) for idx, a in enumerate(row1)]
+    curated_groups[1] = [(a[0], clean_album_name(a[1]), a[2], a[3], 1, idx+1) for idx, a in enumerate(row1)]
+
+    # Featured Video Albums
+    cursor.execute(f"""
+        SELECT TOP (4) id, album_name, endpoint, thumbnail_url
+        FROM [{albumTable}]
+        WHERE tab_name = 'Categories' AND media IS NOT NULL AND LOWER(media) IN ('video', 'videos')
+        ORDER BY row_num, col_num
+    """)
+    row2 = cursor.fetchall()
+    curated_groups[2] = [(a[0], clean_album_name(a[1]), a[2], a[3], 2, idx+1) for idx, a in enumerate(row2)]
 
     def get_top_4(cat, row):
         cursor.execute(f"""
@@ -90,52 +104,65 @@ def get_main_data():
             FROM [{albumTable}]
             WHERE tab_name = 'All' AND category = ?
             ORDER BY CASE WHEN oldest_photo_date IS NULL THEN 1 ELSE 0 END ASC,
-                     oldest_photo_date DESC, album_name ASC
+                      oldest_photo_date DESC, album_name ASC
         """, (cat,))
         albums = cursor.fetchall()
-        return [(a[0], a[1], a[2], a[3], row, idx+1) for idx, a in enumerate(albums)]
+        return [(a[0], clean_album_name(a[1]), a[2], a[3], row, idx+1) for idx, a in enumerate(albums)]
 
-    curated_groups[2] = get_top_4('Family', 2)
-    curated_groups[3] = get_top_4('Travel', 3)
-    curated_groups[4] = get_top_4('Friends', 4)
-    curated_groups[5] = get_top_4('Hobby', 5)
+    curated_groups[3] = get_top_4('Family', 3)
+    curated_groups[4] = get_top_4('Travel', 4)
+    curated_groups[5] = get_top_4('Friends', 5)
+    curated_groups[6] = get_top_4('Hobby', 6)
 
     # Category tabs
     valid_categories = ['Family', 'Travel', 'Hobby', 'Friends']
     category_groups = {}
     category_album_counts = {}
 
+    def create_groups(album_list):
+        groups = []
+        row = []
+        for album in album_list:
+            row.append((album[0], clean_album_name(album[1]), album[2], album[3], album[4]))
+            if len(row) == 4:
+                groups.append(row)
+                row = []
+        if row:
+            groups.append(row)
+        return groups
+
     for cat in valid_categories:
         cursor.execute(f"""
-            SELECT id, album_name, endpoint, thumbnail_url
+            SELECT id, album_name, endpoint, thumbnail_url, media
             FROM [{albumTable}]
             WHERE tab_name = 'All' AND category = ?
             ORDER BY CASE WHEN oldest_photo_date IS NULL THEN 1 ELSE 0 END ASC,
-                     oldest_photo_date DESC, album_name ASC
+                      oldest_photo_date DESC, album_name ASC
         """, (cat,))
         albums = cursor.fetchall()
         if albums:
-            groups = []
-            row = []
-            for album in albums:
-                row.append(album)
-                if len(row) == 4:
-                    groups.append(row)
-                    row = []
-            if row:
-                groups.append(row)
-            category_groups[cat] = groups
-            category_album_counts[cat] = len(albums)
+            pictures = [a for a in albums if a[4] and a[4].lower() == 'pictures']
+            videos = [a for a in albums if a[4] and a[4].lower() in ['video', 'videos']]
+            category_groups[cat] = {
+                'pictures': create_groups(pictures),
+                'videos': create_groups(videos)
+            }
+            category_album_counts[cat] = {
+                'pictures': len(pictures),
+                'videos': len(videos),
+                'total': len(albums)
+            }
 
     cursor.close()
     conn.close()
 
     category_titles = {
-        1: 'Featured Albums',
-        2: 'Recent Family Moments',
-        3: 'Latest Travel Adventures',
-        4: 'Friends & Gatherings',
-        5: 'Hobby Highlights'
+        1: 'Featured Picture Albums',
+        2: 'Featured Video Albums',
+        3: 'Recent Family Moments',
+        4: 'Latest Travel Adventures',
+        5: 'Friends & Gatherings',
+        6: 'Hobby Highlights'
     }
 
     return {
@@ -158,7 +185,7 @@ def random_album_thumbs():
     cursor.close()
     conn.close()
 
-    items = [{"name": row[0], "url": row[1], "endpoint": row[2]} for row in rows]
+    items = [{"name": clean_album_name(row[0]), "url": row[1], "endpoint": row[2]} for row in rows]
     random.shuffle(items)
     return jsonify(items[:20])
 
@@ -282,7 +309,7 @@ def main():
             for row in results:
                 name, endpoint, thumb, date = row
                 y = date.year if date else "Unknown"
-                results_by_year.setdefault(y, []).append((name, endpoint, thumb))
+                results_by_year.setdefault(y, []).append((clean_album_name(name), endpoint, thumb))
 
             sorted_years = sorted(results_by_year.keys(), reverse=True)
             total_results = sum(len(v) for v in results_by_year.values())
